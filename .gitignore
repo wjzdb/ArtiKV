@@ -35,3 +35,7 @@
 .xmake
 # for clangd index
 .cache 
+
+# exclude ide
+.vscode
+.idea
