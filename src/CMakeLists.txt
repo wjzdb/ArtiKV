@@ -1,10 +1,10 @@
 file(
     GLOB 
-    SORUCES
+    SOURCES
     "*.cpp"
 )
 
 add_executable(
     ${PROJECT_NAME}
-    ${SORUCES}
+    ${SOURCES}
 )
