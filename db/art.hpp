@@ -16,7 +16,7 @@ namespace art {
 using ARTDataRef = std::span<const unsigned char>;
 using ARTData = std::vector<unsigned char>;
 enum class NodeType : uint8_t { Node4, Node16, Node48, Node256, Leaf };
-inline constexpr size_t MAX_PARTIAL_LEN = 10;
+inline constexpr size_t MAX_PREFIX_LEN = 8;
 
 // Abstract base class of all type of node. It knows nothing but its type.
 class Node {
@@ -36,21 +36,19 @@ using NodeRef = std::atomic<Node *>;
 // info of a key path.
 class InnerNode : public Node {
 public:
-  virtual ~InnerNode() = default;
-  
-  /**
-   * @brief 
-   * 
-   * @param byte 
-   * @return Node* 
-   */
-  virtual Node* findChild(unsigned char byte) = 0;
-  virtual void addChild(unsigned char byte, Node* child);
+  virtual ~InnerNode() = default;  
+  virtual NodeRef& findChild(unsigned char byte) = 0;
+  virtual void addChild(unsigned char byte, Node* child) = 0;
+  virtual bool isFull() = 0;
+  // TODO: when using Arena, can pass Arena as a param to method `grow`.
+  virtual InnerNode* grow() = 0;
 
-protected:
-  uint8_t children_count;
-  size_t partial_len;
-  std::array<unsigned char, MAX_PARTIAL_LEN> partial_key;
+  InnerNode(uint8_t cc = 0, size_t pl = 0): children_count(cc), prefix_len(pl){}
+  int commonPrefixLen(ARTDataRef key, int depth);
+
+  std::atomic<uint8_t> children_count;
+  size_t prefix_len;
+  std::array<unsigned char, MAX_PREFIX_LEN> prefix;
 };
 
 // Smallest node type, which can store up to 4 child pointers.
@@ -58,11 +56,17 @@ protected:
 // Keys are sorted.
 class Node4 : public InnerNode {
 public:
+  Node4(): InnerNode(0, 0) {
+    keys.fill(0);
+    for (auto& a : children)
+      a = nullptr;
+  }
   NodeType type() const override { return NodeType::Node4; }
-  Node* findChild(unsigned char byte) override;
+  NodeRef& findChild(unsigned char byte) override;
   void addChild(unsigned char byte, Node* child) override;
+  bool isFull() override;
+  InnerNode* grow() override;
 
-private:
   std::array<unsigned char, 4> keys;
   std::array<NodeRef, 4> children;
 };
@@ -72,11 +76,17 @@ private:
 // Keys are sorted.
 class Node16 : public InnerNode {
 public:
+  Node16(): InnerNode(0, 0) {
+    keys.fill(0);
+    for (auto& a : children)
+      a = nullptr;
+  }
  NodeType type() const override { return NodeType::Node16; }
- Node* findChild(unsigned char byte) override;
+ NodeRef& findChild(unsigned char byte) override;
  void addChild(unsigned char byte, Node* child) override;
+ bool isFull() override;
+ InnerNode* grow() override;
 
-private:
   std::array<unsigned char, 16> keys;
   std::array<NodeRef, 16> children;
 };
@@ -85,11 +95,17 @@ private:
 // Child pointers can be indexed directly by key.
 class Node48 : public InnerNode {
 public:
+  Node48(): InnerNode(0, 0) {
+    keys.fill(0);
+    for (auto& a : children)
+      a = nullptr;
+  }
   NodeType type() const override { return NodeType::Node48; }
-  Node* findChild(unsigned char byte) override;
+  NodeRef& findChild(unsigned char byte) override;
   void addChild(unsigned char byte, Node* child) override;
+  bool isFull() override;
+  InnerNode* grow() override;
 
-private:
   std::array<unsigned char, 256> keys;
   std::array<NodeRef, 48> children;
 };
@@ -99,22 +115,32 @@ private:
 // by a single lookup.
 class Node256 : public InnerNode {
 public:
+  Node256(): InnerNode(0, 0) {
+    for (auto& a : children)
+      a = nullptr;
+  }
   NodeType type() const override { return NodeType::Node256; }
-  Node* findChild(unsigned char byte) override;
+  NodeRef& findChild(unsigned char byte) override;
   void addChild(unsigned char byte, Node* child) override;
+  bool isFull() override;
+  InnerNode* grow() override;
 
-private:
   std::array<NodeRef, 256> children;
 };
 
 // Leaf node which contains complete key/value data.
 class LeafNode : public Node {
 public:
+  LeafNode(ARTData&& key, ARTData&& value): key(key), val(value) {};
   NodeType type() const override { return NodeType::Leaf; }
+  bool leafMatches(ARTDataRef key, int depth);
+
+  ARTDataRef keyRef() { return ARTDataRef(this->key.data(), this->key.size()); }
+  ARTDataRef valueRef() { return ARTDataRef(this->val.data(), this->val.size()); }
 
 private:
-  art::ARTData key;
-  art::ARTData val;
+  ARTData key;
+  ARTData val;
 };
 
 /**
@@ -149,6 +175,13 @@ private:
  *     }
  *     tree.remove("key1");
  * @endcode
+ *
+ * @section acknowledgement_sec Acknowledgements
+ * I would like to extend my sincere gratitude towards the authors of the paper "The Adaptive Radix Tree: ARTful Indexing for Main-Memory Databases" 
+ * for their clear and concise explanation of ART. Their work has been instrumental in the development of this project.
+ * 
+ * Furthermore, I am deeply thankful to the open-source community, especially the contributors of the ART implementation in the project available at https://github.com/armon/libart. 
+ * Their work has provided invaluable insights and has greatly assisted in the realization of this project.
  */
 class ART {
 public:
@@ -185,11 +218,23 @@ public:
 
 private:
   NodeRef root;
-  size_t tree_size;
+  std::atomic<size_t> tree_size;
 
-  void insertRecursively(NodeRef node, ARTDataRef key, LeafNode leaf, int depth);
-  static void replace(NodeRef& node, Node* newNode);
+  /**
+   * Insert operation implementation.
+   * 
+   * @return If the insert operation is actually update operation(key already exists)
+   */
+  bool insertRecursively(NodeRef& node, ARTDataRef key, LeafNode* leaf, int depth);
+  std::optional<ARTDataRef> searchRecursively(Node* node, ARTDataRef key, int depth);
 };
+
+void replace(NodeRef& node, Node* newNode);
+Node4* makeNode4();
+Node16* makeNode16();
+Node48* makeNode48();
+Node256* makeNode256();
+LeafNode* makeLeafNode(ARTData&& key, ARTData&& value);
 
 } // namespace art
 
