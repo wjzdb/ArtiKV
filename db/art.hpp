@@ -1,6 +1,4 @@
-#ifndef __ART_HPP__
-#define __ART_HPP__
-
+#pragma once
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -8,13 +6,15 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <sys/types.h>
 #include <vector>
 
+#include "slice.hpp"
+
 namespace art {
 
-using ARTDataRef = std::span<const unsigned char>;
-using ARTData = std::vector<unsigned char>;
+using ARTData = std::vector<uint8_t>;
 enum class NodeType : uint8_t { Node4, Node16, Node48, Node256, Leaf };
 inline constexpr size_t MAX_PARTIAL_LEN = 10;
 
@@ -159,7 +159,7 @@ public:
    * @param value value The value to associate with the key, which is a byte
    * stream. This value is moved into the tree.
    */
-  void insert(ARTDataRef key, ARTData &&value);
+  void insert(Slice key, OwnedSlice value);
 
   /**
    * Searches for a value associated with a given key in the ART.
@@ -168,7 +168,7 @@ public:
    * the object to a byte stream
    * @return std::optional<ARTDataRef>
    */
-  std::optional<ARTDataRef> search(ARTDataRef key);
+  std::optional<std::span<uint8_t>> search(Slice key);
 
   /**
    * Removes a key-value pair from the ART, identified by the key.
@@ -176,7 +176,7 @@ public:
    * @param key The key of the pair to remove. Before using it, you should
    * convert the object to a byte stream
    */
-  void remove(ARTDataRef key);
+  void remove(Slice key);
 
   /**
    * Returns the tree size.
@@ -187,10 +187,9 @@ private:
   NodeRef root;
   size_t tree_size;
 
-  void insertRecursively(NodeRef node, ARTDataRef key, LeafNode leaf, int depth);
+  void insertRecursively(NodeRef node, std::span<uint8_t> key, LeafNode leaf, int depth);
   static void replace(NodeRef& node, Node* newNode);
 };
 
 } // namespace art
 
-#endif
