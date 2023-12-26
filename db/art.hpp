@@ -44,7 +44,7 @@ public:
    * @param byte 
    * @return Node* 
    */
-  virtual Node* findChild(unsigned char byte) = 0;
+  virtual std::optional<Node*> findChild(unsigned char byte) = 0;
   virtual void addChild(unsigned char byte, Node* child);
 
 protected:
@@ -59,7 +59,7 @@ protected:
 class Node4 : public InnerNode {
 public:
   NodeType type() const override { return NodeType::Node4; }
-  Node* findChild(unsigned char byte) override;
+  std::optional<Node*> findChild(unsigned char byte) override;
   void addChild(unsigned char byte, Node* child) override;
 
 private:
@@ -73,7 +73,7 @@ private:
 class Node16 : public InnerNode {
 public:
  NodeType type() const override { return NodeType::Node16; }
- Node* findChild(unsigned char byte) override;
+ std::optional<Node*> findChild(unsigned char byte) override;
  void addChild(unsigned char byte, Node* child) override;
 
 private:
@@ -86,7 +86,7 @@ private:
 class Node48 : public InnerNode {
 public:
   NodeType type() const override { return NodeType::Node48; }
-  Node* findChild(unsigned char byte) override;
+  std::optional<Node*> findChild(unsigned char byte) override;
   void addChild(unsigned char byte, Node* child) override;
 
 private:
@@ -100,7 +100,7 @@ private:
 class Node256 : public InnerNode {
 public:
   NodeType type() const override { return NodeType::Node256; }
-  Node* findChild(unsigned char byte) override;
+  std::optional<Node*> findChild(unsigned char byte) override;
   void addChild(unsigned char byte, Node* child) override;
 
 private:
