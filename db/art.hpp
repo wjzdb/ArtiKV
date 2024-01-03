@@ -23,12 +23,7 @@ class Node {
 public:
   virtual ~Node() = default;
 
-  /**
-   * Indicates the type of a node: InnerNode(Node4, Node16, Node48 or Node256) or LeafNode
-   * 
-   * @return NodeType type of a node
-   */
-  virtual NodeType type() const = 0;
+  NodeType type;
 };
 using NodeRef = std::atomic<Node *>;
 
@@ -38,15 +33,6 @@ class InnerNode : public Node {
 public:
   virtual ~InnerNode() = default;
   
-  /**
-   * @brief 
-   * 
-   * @param byte 
-   * @return Node* 
-   */
-  virtual Node* findChild(unsigned char byte) = 0;
-  virtual void addChild(unsigned char byte, Node* child);
-
 protected:
   uint8_t children_count;
   size_t partial_len;
@@ -58,9 +44,8 @@ protected:
 // Keys are sorted.
 class Node4 : public InnerNode {
 public:
-  NodeType type() const override { return NodeType::Node4; }
-  Node* findChild(unsigned char byte) override;
-  void addChild(unsigned char byte, Node* child) override;
+  Node* findChild(unsigned char byte);
+  void addChild(unsigned char byte, Node* child);
 
 private:
   std::array<unsigned char, 4> keys;
@@ -72,9 +57,8 @@ private:
 // Keys are sorted.
 class Node16 : public InnerNode {
 public:
- NodeType type() const override { return NodeType::Node16; }
- Node* findChild(unsigned char byte) override;
- void addChild(unsigned char byte, Node* child) override;
+ Node* findChild(unsigned char byte);
+ void addChild(unsigned char byte, Node* child);
 
 private:
   std::array<unsigned char, 16> keys;
@@ -85,9 +69,8 @@ private:
 // Child pointers can be indexed directly by key.
 class Node48 : public InnerNode {
 public:
-  NodeType type() const override { return NodeType::Node48; }
-  Node* findChild(unsigned char byte) override;
-  void addChild(unsigned char byte, Node* child) override;
+  Node* findChild(unsigned char byte);
+  void addChild(unsigned char byte, Node* child);
 
 private:
   std::array<unsigned char, 256> keys;
@@ -99,9 +82,8 @@ private:
 // by a single lookup.
 class Node256 : public InnerNode {
 public:
-  NodeType type() const override { return NodeType::Node256; }
-  Node* findChild(unsigned char byte) override;
-  void addChild(unsigned char byte, Node* child) override;
+  Node* findChild(unsigned char byte);
+  void addChild(unsigned char byte, Node* child);
 
 private:
   std::array<NodeRef, 256> children;
@@ -109,9 +91,6 @@ private:
 
 // Leaf node which contains complete key/value data.
 class LeafNode : public Node {
-public:
-  NodeType type() const override { return NodeType::Leaf; }
-
 private:
   art::ARTData key;
   art::ARTData val;
